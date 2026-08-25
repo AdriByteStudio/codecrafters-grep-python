@@ -1,4 +1,5 @@
 import sys
+import os
 
 
 def match_char_at(pattern, input_line, pi, ii):
@@ -254,6 +255,8 @@ def main():
             color = arg.split('=', 1)[1]
             args.remove(arg)
             break
+    if color == 'auto':
+        color = 'always' if os.isatty(sys.stdout.fileno()) else 'never'
     pattern = args[1]
     input_data = sys.stdin.read()
 
