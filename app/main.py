@@ -1,10 +1,7 @@
 import sys
 
-# import pyparsing - available if you need it!
-# import lark - available if you need it!
 
-
-def match_char_at(input_line, pi, ii):
+def match_char_at(pattern, input_line, pi, ii):
     """Try to match one pattern element at input position ii.
     Returns new input index on match, or None on failure."""
     if pi < len(pattern) and pattern[pi] == '\\' and pi + 1 < len(pattern):
@@ -34,47 +31,133 @@ def match_char_at(input_line, pi, ii):
     return None
 
 
-def elem_len(pi):
+def elem_len(pattern, pi):
     """Return how many pattern chars one element starting at pi consumes."""
     if pattern[pi] == '\\' and pi + 1 < len(pattern):
         return 2
     if pattern[pi] == '[':
         return pattern.index(']', pi + 1) - pi + 1
+    if pattern[pi] == '(':
+        return find_group_end(pattern, pi) - pi + 1
     return 1
 
 
-def match_from(input_line, pi, ii):
+def find_group_end(pattern, start):
+    """Find the closing ) matching the ( at start. Returns index of ')' or -1."""
+    depth = 1
+    i = start + 1
+    while i < len(pattern) and depth > 0:
+        if pattern[i] == '(':
+            depth += 1
+        elif pattern[i] == ')':
+            depth -= 1
+        i += 1
+    return i - 1 if depth == 0 else -1
+
+
+def split_alternatives(group_content):
+    """Split group content by | at the top level (not inside nested parens)."""
+    alternatives = []
+    depth = 0
+    current = []
+    for ch in group_content:
+        if ch == '(':
+            depth += 1
+            current.append(ch)
+        elif ch == ')':
+            depth -= 1
+            current.append(ch)
+        elif ch == '|' and depth == 0:
+            alternatives.append(''.join(current))
+            current = []
+        else:
+            current.append(ch)
+    alternatives.append(''.join(current))
+    return alternatives
+
+
+def match_from(pattern, input_line, pi, ii):
     """Match pattern[pi:] against input starting at ii. Returns end index or None."""
     while pi < len(pattern):
-        next_pi = pi + elem_len(pi)
+        next_pi = pi + elem_len(pattern, pi)
         if next_pi < len(pattern) and pattern[next_pi] == '+':
-            elen = elem_len(pi)
             # Greedily match as many as possible (at least 1)
             positions = []
-            nxt = match_char_at(input_line, pi, ii)
+            nxt = match_char_at(pattern, input_line, pi, ii)
             if nxt is None:
-                return None  # + requires at least one match
+                return None
             positions.append(nxt)
             while True:
-                nxt = match_char_at(input_line, pi, positions[-1])
+                nxt = match_char_at(pattern, input_line, pi, positions[-1])
                 if nxt is None:
                     break
                 positions.append(nxt)
-            # Try from most greedy to least
             for pos in reversed(positions):
-                result = match_from(input_line, next_pi + 1, pos)
+                result = match_from(pattern, input_line, next_pi + 1, pos)
                 if result is not None:
                     return result
             return None
         if next_pi < len(pattern) and pattern[next_pi] == '?':
-            # Try one match first (greedy), then zero
-            nxt = match_char_at(input_line, pi, ii)
+            nxt = match_char_at(pattern, input_line, pi, ii)
             if nxt is not None:
-                result = match_from(input_line, next_pi + 1, nxt)
+                result = match_from(pattern, input_line, next_pi + 1, nxt)
                 if result is not None:
                     return result
-            return match_from(input_line, next_pi + 1, ii)
-        nxt = match_char_at(input_line, pi, ii)
+            return match_from(pattern, input_line, next_pi + 1, ii)
+        if pattern[pi] == '(':
+            end = find_group_end(pattern, pi)
+            if end == -1:
+                return None
+            group_content = pattern[pi + 1:end]
+            rest_pi = end + 1
+            # Check for quantifier after group
+            if rest_pi < len(pattern) and pattern[rest_pi] in ('+', '?'):
+                q = pattern[rest_pi]
+                rest_pi += 1
+                if q == '+':
+                    positions = []
+                    cur = ii
+                    # Must match at least once
+                    found_any = False
+                    for alt in split_alternatives(group_content):
+                        r = match_from(alt, input_line, 0, cur)
+                        if r is not None:
+                            positions.append(r)
+                            found_any = True
+                    if not found_any:
+                        return None
+                    # Greedily try more
+                    while True:
+                        found_more = False
+                        for alt in split_alternatives(group_content):
+                            r = match_from(alt, input_line, 0, positions[-1])
+                            if r is not None:
+                                positions.append(r)
+                                found_more = True
+                        if not found_more:
+                            break
+                    for pos in reversed(positions):
+                        result = match_from(pattern, input_line, rest_pi, pos)
+                        if result is not None:
+                            return result
+                    return None
+                else:  # ?
+                    for alt in split_alternatives(group_content):
+                        r = match_from(alt, input_line, 0, ii)
+                        if r is not None:
+                            result = match_from(pattern, input_line, rest_pi, r)
+                            if result is not None:
+                                return result
+                    return match_from(pattern, input_line, rest_pi, ii)
+            # No quantifier: try each alternative
+            for alt in split_alternatives(group_content):
+                r = match_from(alt, input_line, 0, ii)
+                if r is not None:
+                    result = match_from(pattern, input_line, rest_pi, r)
+                    if result is not None:
+                        return result
+            return None
+        nxt = match_char_at(pattern, input_line, pi, ii)
         if nxt is None:
             return None
         ii = nxt
@@ -83,17 +166,15 @@ def match_from(input_line, pi, ii):
 
 
 def match_pattern(inp, pat):
-    global pattern
-    pattern = pat
-    anchored_start = pattern.startswith('^')
+    anchored_start = pat.startswith('^')
     if anchored_start:
-        pattern = pattern[1:]
-    has_end_anchor = pattern.endswith('$')
+        pat = pat[1:]
+    has_end_anchor = pat.endswith('$')
     if has_end_anchor:
-        pattern = pattern[:-1]
+        pat = pat[:-1]
     starts = [0] if anchored_start else range(len(inp) + 1)
     for start in starts:
-        end = match_from(inp, 0, start)
+        end = match_from(pat, inp, 0, start)
         if end is not None:
             if has_end_anchor:
                 if end == len(inp):
@@ -111,12 +192,10 @@ def main():
         print("Expected first argument to be '-E'")
         exit(1)
 
-    # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!", file=sys.stderr)
 
-    # TODO: Uncomment the code below to pass the first stage
     if match_pattern(input_line, pattern):
-      exit(0)
+        exit(0)
     else:
         exit(1)
 
