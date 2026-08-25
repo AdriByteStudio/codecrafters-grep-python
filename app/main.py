@@ -248,6 +248,12 @@ def main():
     only_matching = '-o' in args
     if only_matching:
         args.remove('-o')
+    color = None
+    for arg in args:
+        if arg.startswith('--color='):
+            color = arg.split('=', 1)[1]
+            args.remove(arg)
+            break
     pattern = args[1]
     input_data = sys.stdin.read()
 
@@ -269,7 +275,15 @@ def main():
                 found = True
         else:
             if match_pattern(line, pattern):
-                print(line)
+                if color == 'always':
+                    m = find_match(line, pattern)
+                    if m:
+                        s, e = m
+                        print(line[:s] + '\033[01;31m' + line[s:e] + '\033[m' + line[e:])
+                    else:
+                        print(line)
+                else:
+                    print(line)
                 found = True
 
     if found:
