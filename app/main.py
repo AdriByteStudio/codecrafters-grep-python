@@ -212,6 +212,15 @@ def find_all_matches(inp, pat):
     has_end_anchor = pat.endswith('$')
     if has_end_anchor:
         pat = pat[:-1]
+    if anchored_start:
+        end = match_from(pat, inp, 0, 0)
+        if end is not None:
+            if has_end_anchor:
+                if end == len(inp):
+                    return [(0, end)]
+            else:
+                return [(0, end)]
+        return []
     matches = []
     pos = 0
     while pos <= len(inp):
