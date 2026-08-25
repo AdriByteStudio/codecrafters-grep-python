@@ -184,26 +184,55 @@ def match_pattern(inp, pat):
     return False
 
 
+def find_match(inp, pat):
+    """Return (start, end) of the first match, or None."""
+    anchored_start = pat.startswith('^')
+    if anchored_start:
+        pat = pat[1:]
+    has_end_anchor = pat.endswith('$')
+    if has_end_anchor:
+        pat = pat[:-1]
+    starts = [0] if anchored_start else range(len(inp) + 1)
+    for start in starts:
+        end = match_from(pat, inp, 0, start)
+        if end is not None:
+            if has_end_anchor:
+                if end == len(inp):
+                    return (start, end)
+            else:
+                return (start, end)
+    return None
+
+
 def main():
-    pattern = sys.argv[2]
+    args = sys.argv[1:]
+    only_matching = '-o' in args
+    if only_matching:
+        args.remove('-o')
+    pattern = args[1]
     input_data = sys.stdin.read()
 
-    if sys.argv[1] != "-E":
+    if args[0] != "-E":
         print("Expected first argument to be '-E'")
         exit(1)
 
     print("Logs from your program will appear here!", file=sys.stderr)
 
     lines = input_data.split('\n')
-    # Remove trailing empty string from split if input ends with \n
     if lines and lines[-1] == '':
         lines = lines[:-1]
 
     found = False
     for line in lines:
-        if match_pattern(line, pattern):
-            print(line)
-            found = True
+        if only_matching:
+            m = find_match(line, pattern)
+            if m is not None:
+                print(line[m[0]:m[1]])
+                found = True
+        else:
+            if match_pattern(line, pattern):
+                print(line)
+                found = True
 
     if found:
         exit(0)
