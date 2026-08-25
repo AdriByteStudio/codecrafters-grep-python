@@ -142,7 +142,7 @@ def match_from(pattern, input_line, pi, ii):
                     return result
             return match_from(pattern, input_line, q_pos + 1, ii)
         brace = parse_brace(pattern, q_pos)
-        if brace:
+        if brace and pattern[pi] != '(':
             count, brace_len = brace
             rest_pi = q_pos + brace_len
             cur = ii
@@ -160,6 +160,23 @@ def match_from(pattern, input_line, pi, ii):
                 return None
             group_content = pattern[pi + 1:end]
             rest_pi = end + 1
+            brace = parse_brace(pattern, rest_pi)
+            if brace:
+                count, brace_len = brace
+                after_group = rest_pi + brace_len
+
+                def match_repeated_group(repetitions, current):
+                    if repetitions == 0:
+                        return match_from(pattern, input_line, after_group, current)
+                    for alt in split_alternatives(group_content):
+                        next_position = match_from(alt, input_line, 0, current)
+                        if next_position is not None:
+                            result = match_repeated_group(repetitions - 1, next_position)
+                            if result is not None:
+                                return result
+                    return None
+
+                return match_repeated_group(count, ii)
             # Check for quantifier after group
             if rest_pi < len(pattern) and pattern[rest_pi] in ('+', '?'):
                 q = pattern[rest_pi]
