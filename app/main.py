@@ -186,7 +186,7 @@ def match_pattern(inp, pat):
 
 def main():
     pattern = sys.argv[2]
-    input_line = sys.stdin.read().rstrip('\n')
+    input_data = sys.stdin.read()
 
     if sys.argv[1] != "-E":
         print("Expected first argument to be '-E'")
@@ -194,8 +194,18 @@ def main():
 
     print("Logs from your program will appear here!", file=sys.stderr)
 
-    if match_pattern(input_line, pattern):
-        print(input_line)
+    lines = input_data.split('\n')
+    # Remove trailing empty string from split if input ends with \n
+    if lines and lines[-1] == '':
+        lines = lines[:-1]
+
+    found = False
+    for line in lines:
+        if match_pattern(line, pattern):
+            print(line)
+            found = True
+
+    if found:
         exit(0)
     else:
         exit(1)
