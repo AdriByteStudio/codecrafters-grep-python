@@ -258,10 +258,14 @@ def find_all_matches(inp, pat):
 
 
 def main():
+    import os
     args = sys.argv[1:]
     only_matching = '-o' in args
     if only_matching:
         args.remove('-o')
+    recursive = '-r' in args
+    if recursive:
+        args.remove('-r')
     color = None
     for arg in args:
         if arg.startswith('--color='):
@@ -279,7 +283,22 @@ def main():
     print("Logs from your program will appear here!", file=sys.stderr)
 
     file_paths = args[2:] if len(args) > 2 else []
-    multiple_files = len(file_paths) > 1
+
+    if recursive and file_paths:
+        input_files = []
+        for fp in file_paths:
+            if os.path.isfile(fp):
+                input_files.append((fp, fp))
+            elif os.path.isdir(fp):
+                for root, dirs, files in os.walk(fp):
+                    dirs.sort()
+                    for fname in sorted(files):
+                        full = os.path.join(root, fname)
+                        input_files.append((full, full))
+        multiple_files = True
+    else:
+        input_files = [(fp, fp) for fp in file_paths] if file_paths else []
+        multiple_files = len(input_files) > 1
 
     def process_line(line, prefix):
         nonlocal found
@@ -304,11 +323,11 @@ def main():
                 found = True
 
     found = False
-    if file_paths:
-        for fp in file_paths:
+    if input_files:
+        for fp, display_path in input_files:
             with open(fp) as f:
                 input_data = f.read()
-            prefix = fp + ':' if multiple_files else ''
+            prefix = display_path + ':' if multiple_files else ''
             for line in input_data.split('\n'):
                 if line == '' and input_data.endswith('\n'):
                     continue
