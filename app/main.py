@@ -4,11 +4,29 @@ import sys
 # import lark - available if you need it!
 
 
+def match_at(input_line, pattern, pos):
+    """Try to match the full pattern starting at position pos in input_line."""
+    pi = 0  # pattern index
+    ii = pos  # input index
+    while pi < len(pattern):
+        if pattern[pi] == '\\' and pi + 1 < len(pattern) and pattern[pi + 1] == 'd':
+            if ii >= len(input_line) or not input_line[ii].isdigit():
+                return False
+            pi += 2
+            ii += 1
+        else:
+            if ii >= len(input_line) or input_line[ii] != pattern[pi]:
+                return False
+            pi += 1
+            ii += 1
+    return True
+
+
 def match_pattern(input_line, pattern):
-    if len(pattern) == 1:
-        return pattern in input_line
-    else:
-        raise RuntimeError(f"Unhandled pattern: {pattern}")
+    for start in range(len(input_line)):
+        if match_at(input_line, pattern, start):
+            return True
+    return False
 
 
 def main():
