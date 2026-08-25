@@ -5,7 +5,8 @@ import sys
 
 
 def match_at(input_line, pattern, pos):
-    """Try to match the full pattern starting at position pos in input_line."""
+    """Try to match the full pattern starting at position pos in input_line.
+    Returns the input index after the match, or None on failure."""
     pi = 0  # pattern index
     ii = pos  # input index
     while pi < len(pattern):
@@ -18,7 +19,7 @@ def match_at(input_line, pattern, pos):
             else:
                 is_match = False
             if not is_match:
-                return False
+                return None
             pi += 2
             ii += 1
         elif pattern[pi] == '[':
@@ -26,33 +27,40 @@ def match_at(input_line, pattern, pos):
             if pattern[pi + 1] == '^':
                 chars = pattern[pi + 2:end]
                 if ii >= len(input_line) or input_line[ii] in chars:
-                    return False
+                    return None
             else:
                 chars = pattern[pi + 1:end]
                 if ii >= len(input_line) or input_line[ii] not in chars:
-                    return False
+                    return None
             pi = end + 1
             ii += 1
         else:
             if ii >= len(input_line) or input_line[ii] != pattern[pi]:
-                return False
+                return None
             pi += 1
             ii += 1
-    return True
+    return ii
 
 
 def match_pattern(input_line, pattern):
     if pattern.startswith('^'):
-        return match_at(input_line, pattern[1:], 0)
+        pattern = pattern[1:]
+    if pattern.endswith('$'):
+        pattern = pattern[:-1]
+        for start in range(len(input_line) + 1):
+            end = match_at(input_line, pattern, start)
+            if end is not None and end == len(input_line):
+                return True
+        return False
     for start in range(len(input_line)):
-        if match_at(input_line, pattern, start):
+        if match_at(input_line, pattern, start) is not None:
             return True
     return False
 
 
 def main():
     pattern = sys.argv[2]
-    input_line = sys.stdin.read()
+    input_line = sys.stdin.read().rstrip('\n')
 
     if sys.argv[1] != "-E":
         print("Expected first argument to be '-E'")
