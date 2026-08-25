@@ -276,12 +276,15 @@ def main():
         else:
             if match_pattern(line, pattern):
                 if color == 'always':
-                    m = find_match(line, pattern)
-                    if m:
-                        s, e = m
-                        print(line[:s] + '\033[01;31m' + line[s:e] + '\033[m' + line[e:])
-                    else:
-                        print(line)
+                    matches = find_all_matches(line, pattern)
+                    result = []
+                    prev = 0
+                    for s, e in matches:
+                        result.append(line[prev:s])
+                        result.append('\033[01;31m' + line[s:e] + '\033[m')
+                        prev = e
+                    result.append(line[prev:])
+                    print(''.join(result))
                 else:
                     print(line)
                 found = True
