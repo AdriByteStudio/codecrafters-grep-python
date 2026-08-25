@@ -278,21 +278,14 @@ def main():
 
     print("Logs from your program will appear here!", file=sys.stderr)
 
-    if len(args) > 2:
-        with open(args[2]) as f:
-            input_data = f.read()
-    else:
-        input_data = sys.stdin.read()
+    file_paths = args[2:] if len(args) > 2 else []
+    multiple_files = len(file_paths) > 1
 
-    lines = input_data.split('\n')
-    if lines and lines[-1] == '':
-        lines = lines[:-1]
-
-    found = False
-    for line in lines:
+    def process_line(line, prefix):
+        nonlocal found
         if only_matching:
             for start, end in find_all_matches(line, pattern):
-                print(line[start:end])
+                print(prefix + line[start:end])
                 found = True
         else:
             if match_pattern(line, pattern):
@@ -305,10 +298,28 @@ def main():
                         result.append('\033[01;31m' + line[s:e] + '\033[m')
                         prev = e
                     result.append(line[prev:])
-                    print(''.join(result))
+                    print(prefix + ''.join(result))
                 else:
-                    print(line)
+                    print(prefix + line)
                 found = True
+
+    found = False
+    if file_paths:
+        for fp in file_paths:
+            with open(fp) as f:
+                input_data = f.read()
+            prefix = fp + ':' if multiple_files else ''
+            for line in input_data.split('\n'):
+                if line == '' and input_data.endswith('\n'):
+                    continue
+                process_line(line, prefix)
+    else:
+        input_data = sys.stdin.read()
+        lines = input_data.split('\n')
+        if lines and lines[-1] == '':
+            lines = lines[:-1]
+        for line in lines:
+            process_line(line, '')
 
     if found:
         exit(0)
