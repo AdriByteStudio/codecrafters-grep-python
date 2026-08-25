@@ -21,6 +21,13 @@ def match_at(input_line, pattern, pos):
                 return False
             pi += 2
             ii += 1
+        elif pattern[pi] == '[':
+            end = pattern.index(']', pi + 1)
+            chars = pattern[pi + 1:end]
+            if ii >= len(input_line) or input_line[ii] not in chars:
+                return False
+            pi = end + 1
+            ii += 1
         else:
             if ii >= len(input_line) or input_line[ii] != pattern[pi]:
                 return False
