@@ -204,6 +204,36 @@ def find_match(inp, pat):
     return None
 
 
+def find_all_matches(inp, pat):
+    """Return list of (start, end) for all non-overlapping matches."""
+    anchored_start = pat.startswith('^')
+    if anchored_start:
+        pat = pat[1:]
+    has_end_anchor = pat.endswith('$')
+    if has_end_anchor:
+        pat = pat[:-1]
+    matches = []
+    pos = 0
+    while pos <= len(inp):
+        found = False
+        for start in range(pos, len(inp) + 1):
+            end = match_from(pat, inp, 0, start)
+            if end is not None:
+                if has_end_anchor:
+                    if end == len(inp):
+                        matches.append((start, end))
+                        found = True
+                        break
+                else:
+                    matches.append((start, end))
+                    pos = end  # continue after this match
+                    found = True
+                    break
+        if not found:
+            break
+    return matches
+
+
 def main():
     args = sys.argv[1:]
     only_matching = '-o' in args
@@ -225,9 +255,8 @@ def main():
     found = False
     for line in lines:
         if only_matching:
-            m = find_match(line, pattern)
-            if m is not None:
-                print(line[m[0]:m[1]])
+            for start, end in find_all_matches(line, pattern):
+                print(line[start:end])
                 found = True
         else:
             if match_pattern(line, pattern):
