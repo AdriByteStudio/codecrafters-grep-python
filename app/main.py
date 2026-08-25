@@ -4,61 +4,91 @@ import sys
 # import lark - available if you need it!
 
 
-def match_at(input_line, pattern, pos):
-    """Try to match the full pattern starting at position pos in input_line.
-    Returns the input index after the match, or None on failure."""
-    pi = 0  # pattern index
-    ii = pos  # input index
-    while pi < len(pattern):
-        if pattern[pi] == '\\' and pi + 1 < len(pattern):
-            esc = pattern[pi + 1]
-            if esc == 'd':
-                is_match = ii < len(input_line) and input_line[ii].isdigit()
-            elif esc == 'w':
-                is_match = ii < len(input_line) and (input_line[ii].isalnum() or input_line[ii] == '_')
-            else:
-                is_match = False
-            if not is_match:
-                return None
-            pi += 2
-            ii += 1
-        elif pattern[pi] == '[':
-            end = pattern.index(']', pi + 1)
-            if pattern[pi + 1] == '^':
-                chars = pattern[pi + 2:end]
-                if ii >= len(input_line) or input_line[ii] in chars:
-                    return None
-            else:
-                chars = pattern[pi + 1:end]
-                if ii >= len(input_line) or input_line[ii] not in chars:
-                    return None
-            pi = end + 1
-            ii += 1
+def match_char_at(input_line, pi, ii):
+    """Try to match one pattern element at input position ii.
+    Returns new input index on match, or None on failure."""
+    if pi < len(pattern) and pattern[pi] == '\\' and pi + 1 < len(pattern):
+        esc = pattern[pi + 1]
+        if esc == 'd':
+            if ii < len(input_line) and input_line[ii].isdigit():
+                return ii + 1
+        elif esc == 'w':
+            if ii < len(input_line) and (input_line[ii].isalnum() or input_line[ii] == '_'):
+                return ii + 1
+    elif pi < len(pattern) and pattern[pi] == '[':
+        end = pattern.index(']', pi + 1)
+        if pattern[pi + 1] == '^':
+            chars = pattern[pi + 2:end]
+            if ii < len(input_line) and input_line[ii] not in chars:
+                return ii + 1
         else:
-            if ii >= len(input_line) or input_line[ii] != pattern[pi]:
-                return None
-            pi += 1
-            ii += 1
+            chars = pattern[pi + 1:end]
+            if ii < len(input_line) and input_line[ii] in chars:
+                return ii + 1
+    elif pi < len(pattern):
+        if ii < len(input_line) and input_line[ii] == pattern[pi]:
+            return ii + 1
+    return None
+
+
+def elem_len(pi):
+    """Return how many pattern chars one element starting at pi consumes."""
+    if pattern[pi] == '\\' and pi + 1 < len(pattern):
+        return 2
+    if pattern[pi] == '[':
+        return pattern.index(']', pi + 1) - pi + 1
+    return 1
+
+
+def match_from(input_line, pi, ii):
+    """Match pattern[pi:] against input starting at ii. Returns end index or None."""
+    while pi < len(pattern):
+        next_pi = pi + elem_len(pi)
+        if next_pi < len(pattern) and pattern[next_pi] == '+':
+            elen = elem_len(pi)
+            # Greedily match as many as possible (at least 1)
+            positions = []
+            nxt = match_char_at(input_line, pi, ii)
+            if nxt is None:
+                return None  # + requires at least one match
+            positions.append(nxt)
+            while True:
+                nxt = match_char_at(input_line, pi, positions[-1])
+                if nxt is None:
+                    break
+                positions.append(nxt)
+            # Try from most greedy to least
+            for pos in reversed(positions):
+                result = match_from(input_line, next_pi + 1, pos)
+                if result is not None:
+                    return result
+            return None
+        nxt = match_char_at(input_line, pi, ii)
+        if nxt is None:
+            return None
+        ii = nxt
+        pi = next_pi
     return ii
 
 
-def match_pattern(input_line, pattern):
+def match_pattern(inp, pat):
+    global pattern
+    pattern = pat
     anchored_start = pattern.startswith('^')
     if anchored_start:
         pattern = pattern[1:]
-    if pattern.endswith('$'):
+    has_end_anchor = pattern.endswith('$')
+    if has_end_anchor:
         pattern = pattern[:-1]
-        starts = [0] if anchored_start else range(len(input_line) + 1)
-        for start in starts:
-            end = match_at(input_line, pattern, start)
-            if end is not None and end == len(input_line):
+    starts = [0] if anchored_start else range(len(inp) + 1)
+    for start in starts:
+        end = match_from(inp, 0, start)
+        if end is not None:
+            if has_end_anchor:
+                if end == len(inp):
+                    return True
+            else:
                 return True
-        return False
-    if anchored_start:
-        return match_at(input_line, pattern, 0) is not None
-    for start in range(len(input_line)):
-        if match_at(input_line, pattern, start) is not None:
-            return True
     return False
 
 
