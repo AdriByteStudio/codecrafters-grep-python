@@ -63,6 +63,14 @@ def match_from(input_line, pi, ii):
                 if result is not None:
                     return result
             return None
+        if next_pi < len(pattern) and pattern[next_pi] == '?':
+            # Try one match first (greedy), then zero
+            nxt = match_char_at(input_line, pi, ii)
+            if nxt is not None:
+                result = match_from(input_line, next_pi + 1, nxt)
+                if result is not None:
+                    return result
+            return match_from(input_line, next_pi + 1, ii)
         nxt = match_char_at(input_line, pi, ii)
         if nxt is None:
             return None
