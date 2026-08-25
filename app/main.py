@@ -98,6 +98,19 @@ def match_from(pattern, input_line, pi, ii):
                 if result is not None:
                     return result
             return None
+        if next_pi < len(pattern) and pattern[next_pi] == '*':
+            # Greedily match as many as possible (zero or more)
+            positions = [ii]
+            while True:
+                nxt = match_char_at(pattern, input_line, pi, positions[-1])
+                if nxt is None:
+                    break
+                positions.append(nxt)
+            for pos in reversed(positions):
+                result = match_from(pattern, input_line, next_pi + 1, pos)
+                if result is not None:
+                    return result
+            return None
         if next_pi < len(pattern) and pattern[next_pi] == '?':
             nxt = match_char_at(pattern, input_line, pi, ii)
             if nxt is not None:
@@ -258,13 +271,18 @@ def main():
     if color == 'auto':
         color = 'always' if os.isatty(sys.stdout.fileno()) else 'never'
     pattern = args[1]
-    input_data = sys.stdin.read()
 
     if args[0] != "-E":
         print("Expected first argument to be '-E'")
         exit(1)
 
     print("Logs from your program will appear here!", file=sys.stderr)
+
+    if len(args) > 2:
+        with open(args[2]) as f:
+            input_data = f.read()
+    else:
+        input_data = sys.stdin.read()
 
     lines = input_data.split('\n')
     if lines and lines[-1] == '':
