@@ -8,7 +8,7 @@ def match_char_at(pattern, input_line, pi, ii):
     if pi < len(pattern) and pattern[pi] == '\\' and pi + 1 < len(pattern):
         esc = pattern[pi + 1]
         if esc == 'd':
-            if ii < len(input_line) and input_line[ii].isdigit():
+            if ii < len(input_line) and '0' <= input_line[ii] <= '9':
                 return ii + 1
         elif esc == 'w':
             if ii < len(input_line) and (input_line[ii].isalnum() or input_line[ii] == '_'):
@@ -32,15 +32,30 @@ def match_char_at(pattern, input_line, pi, ii):
     return None
 
 
+def parse_brace(pattern, pi):
+    """Check if pattern[pi:] starts with {n}. Returns (count, brace_len) or None."""
+    if pi < len(pattern) and pattern[pi] == '{':
+        end = pattern.index('}', pi + 1)
+        num = pattern[pi + 1:end]
+        if num.isdigit():
+            return (int(num), end - pi + 1)
+    return None
+
+
 def elem_len(pattern, pi):
     """Return how many pattern chars one element starting at pi consumes."""
     if pattern[pi] == '\\' and pi + 1 < len(pattern):
-        return 2
-    if pattern[pi] == '[':
-        return pattern.index(']', pi + 1) - pi + 1
-    if pattern[pi] == '(':
-        return find_group_end(pattern, pi) - pi + 1
-    return 1
+        base = 2
+    elif pattern[pi] == '[':
+        base = pattern.index(']', pi + 1) - pi + 1
+    elif pattern[pi] == '(':
+        base = find_group_end(pattern, pi) - pi + 1
+    else:
+        base = 1
+    brace = parse_brace(pattern, pi + base)
+    if brace:
+        base += brace[1]
+    return base
 
 
 def find_group_end(pattern, start):
@@ -80,9 +95,18 @@ def split_alternatives(group_content):
 def match_from(pattern, input_line, pi, ii):
     """Match pattern[pi:] against input starting at ii. Returns end index or None."""
     while pi < len(pattern):
-        next_pi = pi + elem_len(pattern, pi)
-        if next_pi < len(pattern) and pattern[next_pi] == '+':
-            # Greedily match as many as possible (at least 1)
+        # Compute base element length (without quantifiers)
+        if pattern[pi] == '\\' and pi + 1 < len(pattern):
+            base = 2
+        elif pattern[pi] == '[':
+            base = pattern.index(']', pi + 1) - pi + 1
+        elif pattern[pi] == '(':
+            base = find_group_end(pattern, pi) - pi + 1
+        else:
+            base = 1
+        q_pos = pi + base  # position where quantifier might be
+        # Check for quantifiers
+        if q_pos < len(pattern) and pattern[q_pos] == '+':
             positions = []
             nxt = match_char_at(pattern, input_line, pi, ii)
             if nxt is None:
@@ -94,12 +118,11 @@ def match_from(pattern, input_line, pi, ii):
                     break
                 positions.append(nxt)
             for pos in reversed(positions):
-                result = match_from(pattern, input_line, next_pi + 1, pos)
+                result = match_from(pattern, input_line, q_pos + 1, pos)
                 if result is not None:
                     return result
             return None
-        if next_pi < len(pattern) and pattern[next_pi] == '*':
-            # Greedily match as many as possible (zero or more)
+        if q_pos < len(pattern) and pattern[q_pos] == '*':
             positions = [ii]
             while True:
                 nxt = match_char_at(pattern, input_line, pi, positions[-1])
@@ -107,17 +130,30 @@ def match_from(pattern, input_line, pi, ii):
                     break
                 positions.append(nxt)
             for pos in reversed(positions):
-                result = match_from(pattern, input_line, next_pi + 1, pos)
+                result = match_from(pattern, input_line, q_pos + 1, pos)
                 if result is not None:
                     return result
             return None
-        if next_pi < len(pattern) and pattern[next_pi] == '?':
+        if q_pos < len(pattern) and pattern[q_pos] == '?':
             nxt = match_char_at(pattern, input_line, pi, ii)
             if nxt is not None:
-                result = match_from(pattern, input_line, next_pi + 1, nxt)
+                result = match_from(pattern, input_line, q_pos + 1, nxt)
                 if result is not None:
                     return result
-            return match_from(pattern, input_line, next_pi + 1, ii)
+            return match_from(pattern, input_line, q_pos + 1, ii)
+        brace = parse_brace(pattern, q_pos)
+        if brace:
+            count, brace_len = brace
+            rest_pi = q_pos + brace_len
+            cur = ii
+            for _ in range(count):
+                nxt = match_char_at(pattern, input_line, pi, cur)
+                if nxt is None:
+                    return None
+                cur = nxt
+            pi = rest_pi
+            ii = cur
+            continue
         if pattern[pi] == '(':
             end = find_group_end(pattern, pi)
             if end == -1:
@@ -175,7 +211,7 @@ def match_from(pattern, input_line, pi, ii):
         if nxt is None:
             return None
         ii = nxt
-        pi = next_pi
+        pi = pi + base
     return ii
 
 
