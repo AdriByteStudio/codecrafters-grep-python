@@ -26,7 +26,10 @@ def match_char_at(input_line, pi, ii):
             if ii < len(input_line) and input_line[ii] in chars:
                 return ii + 1
     elif pi < len(pattern):
-        if ii < len(input_line) and input_line[ii] == pattern[pi]:
+        if pattern[pi] == '.':
+            if ii < len(input_line) and input_line[ii] != '\n':
+                return ii + 1
+        elif ii < len(input_line) and input_line[ii] == pattern[pi]:
             return ii + 1
     return None
 
