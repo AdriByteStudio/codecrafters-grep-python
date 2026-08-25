@@ -43,15 +43,19 @@ def match_at(input_line, pattern, pos):
 
 
 def match_pattern(input_line, pattern):
-    if pattern.startswith('^'):
+    anchored_start = pattern.startswith('^')
+    if anchored_start:
         pattern = pattern[1:]
     if pattern.endswith('$'):
         pattern = pattern[:-1]
-        for start in range(len(input_line) + 1):
+        starts = [0] if anchored_start else range(len(input_line) + 1)
+        for start in starts:
             end = match_at(input_line, pattern, start)
             if end is not None and end == len(input_line):
                 return True
         return False
+    if anchored_start:
+        return match_at(input_line, pattern, 0) is not None
     for start in range(len(input_line)):
         if match_at(input_line, pattern, start) is not None:
             return True
