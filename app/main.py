@@ -42,6 +42,8 @@ def match_at(input_line, pattern, pos):
 
 
 def match_pattern(input_line, pattern):
+    if pattern.startswith('^'):
+        return match_at(input_line, pattern[1:], 0)
     for start in range(len(input_line)):
         if match_at(input_line, pattern, start):
             return True
