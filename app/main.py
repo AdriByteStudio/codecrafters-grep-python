@@ -195,6 +195,7 @@ def main():
     print("Logs from your program will appear here!", file=sys.stderr)
 
     if match_pattern(input_line, pattern):
+        print(input_line)
         exit(0)
     else:
         exit(1)
