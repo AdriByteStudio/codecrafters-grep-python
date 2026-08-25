@@ -9,8 +9,15 @@ def match_at(input_line, pattern, pos):
     pi = 0  # pattern index
     ii = pos  # input index
     while pi < len(pattern):
-        if pattern[pi] == '\\' and pi + 1 < len(pattern) and pattern[pi + 1] == 'd':
-            if ii >= len(input_line) or not input_line[ii].isdigit():
+        if pattern[pi] == '\\' and pi + 1 < len(pattern):
+            esc = pattern[pi + 1]
+            if esc == 'd':
+                is_match = ii < len(input_line) and input_line[ii].isdigit()
+            elif esc == 'w':
+                is_match = ii < len(input_line) and (input_line[ii].isalnum() or input_line[ii] == '_')
+            else:
+                is_match = False
+            if not is_match:
                 return False
             pi += 2
             ii += 1
