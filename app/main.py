@@ -103,9 +103,9 @@ def split_alternatives(group_content):
     return alternatives
 
 
-def group_number(pattern, start):
+def group_number(pattern, start, group_offset=0):
     """Return the capture number for the group opening at start."""
-    number = 0
+    number = group_offset
     escaped = False
     for index, character in enumerate(pattern[:start]):
         if escaped:
@@ -117,7 +117,7 @@ def group_number(pattern, start):
     return number + 1
 
 
-def match_from(pattern, input_line, pi, ii, captures=None):
+def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
     """Match pattern[pi:] against input starting at ii. Returns end index or None."""
     if captures is None:
         captures = {}
@@ -197,7 +197,7 @@ def match_from(pattern, input_line, pi, ii, captures=None):
                 return None
             group_content = pattern[pi + 1:end]
             rest_pi = end + 1
-            capture_number = group_number(pattern, pi)
+            capture_number = group_number(pattern, pi, group_offset)
             brace = parse_brace(pattern, rest_pi)
             if brace:
                 minimum, maximum, brace_len = brace
@@ -211,7 +211,9 @@ def match_from(pattern, input_line, pi, ii, captures=None):
                     if maximum is not None and repetitions == maximum:
                         return None
                     for alt in split_alternatives(group_content):
-                        next_position = match_from(alt, input_line, 0, current, captures)
+                        next_position = match_from(
+                            alt, input_line, 0, current, captures, capture_number
+                        )
                         if next_position is not None and next_position != current:
                             result = match_repeated_group(repetitions + 1, next_position)
                             if result is not None:
@@ -230,7 +232,7 @@ def match_from(pattern, input_line, pi, ii, captures=None):
                     # Must match at least once
                     found_any = False
                     for alt in split_alternatives(group_content):
-                        r = match_from(alt, input_line, 0, cur, captures)
+                        r = match_from(alt, input_line, 0, cur, captures, capture_number)
                         if r is not None:
                             positions.append(r)
                             found_any = True
@@ -240,7 +242,7 @@ def match_from(pattern, input_line, pi, ii, captures=None):
                     while True:
                         found_more = False
                         for alt in split_alternatives(group_content):
-                            r = match_from(alt, input_line, 0, positions[-1], captures)
+                            r = match_from(alt, input_line, 0, positions[-1], captures, capture_number)
                             if r is not None:
                                 positions.append(r)
                                 found_more = True
@@ -253,7 +255,7 @@ def match_from(pattern, input_line, pi, ii, captures=None):
                     return None
                 else:  # ?
                     for alt in split_alternatives(group_content):
-                        r = match_from(alt, input_line, 0, ii, captures)
+                        r = match_from(alt, input_line, 0, ii, captures, capture_number)
                         if r is not None:
                             result = match_from(pattern, input_line, rest_pi, r, captures)
                             if result is not None:
@@ -262,7 +264,7 @@ def match_from(pattern, input_line, pi, ii, captures=None):
             # No quantifier: try each alternative
             for alt in split_alternatives(group_content):
                 branch_captures = captures.copy()
-                r = match_from(alt, input_line, 0, ii, branch_captures)
+                r = match_from(alt, input_line, 0, ii, branch_captures, capture_number)
                 if r is not None:
                     branch_captures[capture_number] = input_line[ii:r]
                     result = match_from(pattern, input_line, rest_pi, r, branch_captures)
