@@ -33,14 +33,19 @@ def match_char_at(pattern, input_line, pi, ii):
 
 
 def parse_brace(pattern, pi):
-    """Check if pattern[pi:] starts with {n} or {n,}."""
+    """Check if pattern[pi:] starts with {n}, {n,}, or {n,m}."""
     if pi < len(pattern) and pattern[pi] == '{':
         end = pattern.index('}', pi + 1)
         body = pattern[pi + 1:end]
         if body.isdigit():
-            return (int(body), end - pi + 1, False)
+            count = int(body)
+            return (count, count, end - pi + 1)
         if body.endswith(',') and body[:-1].isdigit():
-            return (int(body[:-1]), end - pi + 1, True)
+            return (int(body[:-1]), None, end - pi + 1)
+        if ',' in body:
+            minimum, maximum = body.split(',', 1)
+            if minimum.isdigit() and maximum.isdigit() and int(minimum) <= int(maximum):
+                return (int(minimum), int(maximum), end - pi + 1)
     return None
 
 
@@ -145,30 +150,27 @@ def match_from(pattern, input_line, pi, ii):
             return match_from(pattern, input_line, q_pos + 1, ii)
         brace = parse_brace(pattern, q_pos)
         if brace and pattern[pi] != '(':
-            count, brace_len, unbounded = brace
+            minimum, maximum, brace_len = brace
             rest_pi = q_pos + brace_len
             cur = ii
             positions = [ii]
-            for _ in range(count):
+            for _ in range(minimum):
                 nxt = match_char_at(pattern, input_line, pi, cur)
                 if nxt is None:
                     return None
                 cur = nxt
                 positions.append(cur)
-            if unbounded:
-                while True:
-                    nxt = match_char_at(pattern, input_line, pi, positions[-1])
-                    if nxt is None:
-                        break
-                    positions.append(nxt)
-                for position in reversed(positions[count:]):
-                    result = match_from(pattern, input_line, rest_pi, position)
-                    if result is not None:
-                        return result
-                return None
-            pi = rest_pi
-            ii = cur
-            continue
+            while maximum is None or len(positions) - 1 < maximum:
+                nxt = match_char_at(pattern, input_line, pi, positions[-1])
+                if nxt is None:
+                    break
+                positions.append(nxt)
+            for position in reversed(positions[minimum:]):
+                result = match_from(pattern, input_line, rest_pi, position)
+                if result is not None:
+                    return result
+            return None
+        
         if pattern[pi] == '(':
             end = find_group_end(pattern, pi)
             if end == -1:
@@ -177,19 +179,15 @@ def match_from(pattern, input_line, pi, ii):
             rest_pi = end + 1
             brace = parse_brace(pattern, rest_pi)
             if brace:
-                count, brace_len, unbounded = brace
+                minimum, maximum, brace_len = brace
                 after_group = rest_pi + brace_len
 
                 def match_repeated_group(repetitions, current):
-                    if repetitions >= count and (unbounded or repetitions == count):
+                    if repetitions >= minimum:
                         result = match_from(pattern, input_line, after_group, current)
                         if result is not None:
                             return result
-                        if not unbounded:
-                            return None
-                    if not unbounded and repetitions == count:
-                        return None
-                    if repetitions > count:
+                    if maximum is not None and repetitions == maximum:
                         return None
                     for alt in split_alternatives(group_content):
                         next_position = match_from(alt, input_line, 0, current)
