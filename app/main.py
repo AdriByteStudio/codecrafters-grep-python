@@ -145,7 +145,7 @@ def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
                     break
                 positions.append(nxt)
             for pos in reversed(positions):
-                result = match_from(pattern, input_line, q_pos + 1, pos, captures)
+                result = match_from(pattern, input_line, q_pos + 1, pos, captures, group_offset)
                 if result is not None:
                     return result
             return None
@@ -157,17 +157,17 @@ def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
                     break
                 positions.append(nxt)
             for pos in reversed(positions):
-                result = match_from(pattern, input_line, q_pos + 1, pos, captures)
+                result = match_from(pattern, input_line, q_pos + 1, pos, captures, group_offset)
                 if result is not None:
                     return result
             return None
         if q_pos < len(pattern) and pattern[q_pos] == '?':
             nxt = match_char_at(pattern, input_line, pi, ii, captures)
             if nxt is not None:
-                result = match_from(pattern, input_line, q_pos + 1, nxt, captures)
+                result = match_from(pattern, input_line, q_pos + 1, nxt, captures, group_offset)
                 if result is not None:
                     return result
-            return match_from(pattern, input_line, q_pos + 1, ii, captures)
+            return match_from(pattern, input_line, q_pos + 1, ii, captures, group_offset)
         brace = parse_brace(pattern, q_pos)
         if brace and pattern[pi] != '(':
             minimum, maximum, brace_len = brace
@@ -186,7 +186,7 @@ def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
                     break
                 positions.append(nxt)
             for position in reversed(positions[minimum:]):
-                result = match_from(pattern, input_line, rest_pi, position, captures)
+                result = match_from(pattern, input_line, rest_pi, position, captures, group_offset)
                 if result is not None:
                     return result
             return None
@@ -205,7 +205,7 @@ def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
 
                 def match_repeated_group(repetitions, current):
                     if repetitions >= minimum:
-                        result = match_from(pattern, input_line, after_group, current, captures)
+                        result = match_from(pattern, input_line, after_group, current, captures, group_offset)
                         if result is not None:
                             return result
                     if maximum is not None and repetitions == maximum:
@@ -249,7 +249,7 @@ def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
                         if not found_more:
                             break
                     for pos in reversed(positions):
-                        result = match_from(pattern, input_line, rest_pi, pos, captures)
+                        result = match_from(pattern, input_line, rest_pi, pos, captures, group_offset)
                         if result is not None:
                             return result
                     return None
@@ -257,17 +257,17 @@ def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
                     for alt in split_alternatives(group_content):
                         r = match_from(alt, input_line, 0, ii, captures, capture_number)
                         if r is not None:
-                            result = match_from(pattern, input_line, rest_pi, r, captures)
+                            result = match_from(pattern, input_line, rest_pi, r, captures, group_offset)
                             if result is not None:
                                 return result
-                    return match_from(pattern, input_line, rest_pi, ii, captures)
+                    return match_from(pattern, input_line, rest_pi, ii, captures, group_offset)
             # No quantifier: try each alternative
             for alt in split_alternatives(group_content):
                 branch_captures = captures.copy()
                 r = match_from(alt, input_line, 0, ii, branch_captures, capture_number)
                 if r is not None:
                     branch_captures[capture_number] = input_line[ii:r]
-                    result = match_from(pattern, input_line, rest_pi, r, branch_captures)
+                    result = match_from(pattern, input_line, rest_pi, r, branch_captures, group_offset)
                     if result is not None:
                         captures.update(branch_captures)
                         return result
