@@ -13,8 +13,8 @@ def match_char_at(pattern, input_line, pi, ii, captures=None):
         elif esc == 'w':
             if ii < len(input_line) and (input_line[ii].isalnum() or input_line[ii] == '_'):
                 return ii + 1
-        elif esc == '1' and captures is not None:
-            captured = captures.get(1)
+        elif '1' <= esc <= '9' and captures is not None:
+            captured = captures.get(int(esc))
             if captured is not None and input_line.startswith(captured, ii):
                 return ii + len(captured)
     elif pi < len(pattern) and pattern[pi] == '[':
@@ -103,6 +103,20 @@ def split_alternatives(group_content):
     return alternatives
 
 
+def group_number(pattern, start):
+    """Return the capture number for the group opening at start."""
+    number = 0
+    escaped = False
+    for index, character in enumerate(pattern[:start]):
+        if escaped:
+            escaped = False
+        elif character == '\\':
+            escaped = True
+        elif character == '(':
+            number += 1
+    return number + 1
+
+
 def match_from(pattern, input_line, pi, ii, captures=None):
     """Match pattern[pi:] against input starting at ii. Returns end index or None."""
     if captures is None:
@@ -183,6 +197,7 @@ def match_from(pattern, input_line, pi, ii, captures=None):
                 return None
             group_content = pattern[pi + 1:end]
             rest_pi = end + 1
+            capture_number = group_number(pattern, pi)
             brace = parse_brace(pattern, rest_pi)
             if brace:
                 minimum, maximum, brace_len = brace
@@ -249,7 +264,7 @@ def match_from(pattern, input_line, pi, ii, captures=None):
                 branch_captures = captures.copy()
                 r = match_from(alt, input_line, 0, ii, branch_captures)
                 if r is not None:
-                    branch_captures[1] = input_line[ii:r]
+                    branch_captures[capture_number] = input_line[ii:r]
                     result = match_from(pattern, input_line, rest_pi, r, branch_captures)
                     if result is not None:
                         captures.update(branch_captures)
