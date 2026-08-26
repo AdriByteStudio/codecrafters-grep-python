@@ -2,7 +2,7 @@ import sys
 import os
 
 
-def match_char_at(pattern, input_line, pi, ii):
+def match_char_at(pattern, input_line, pi, ii, captures=None):
     """Try to match one pattern element at input position ii.
     Returns new input index on match, or None on failure."""
     if pi < len(pattern) and pattern[pi] == '\\' and pi + 1 < len(pattern):
@@ -13,6 +13,10 @@ def match_char_at(pattern, input_line, pi, ii):
         elif esc == 'w':
             if ii < len(input_line) and (input_line[ii].isalnum() or input_line[ii] == '_'):
                 return ii + 1
+        elif esc == '1' and captures is not None:
+            captured = captures.get(1)
+            if captured is not None and input_line.startswith(captured, ii):
+                return ii + len(captured)
     elif pi < len(pattern) and pattern[pi] == '[':
         end = pattern.index(']', pi + 1)
         if pattern[pi + 1] == '^':
@@ -99,8 +103,10 @@ def split_alternatives(group_content):
     return alternatives
 
 
-def match_from(pattern, input_line, pi, ii):
+def match_from(pattern, input_line, pi, ii, captures=None):
     """Match pattern[pi:] against input starting at ii. Returns end index or None."""
+    if captures is None:
+        captures = {}
     while pi < len(pattern):
         # Compute base element length (without quantifiers)
         if pattern[pi] == '\\' and pi + 1 < len(pattern):
@@ -115,39 +121,39 @@ def match_from(pattern, input_line, pi, ii):
         # Check for quantifiers
         if q_pos < len(pattern) and pattern[q_pos] == '+':
             positions = []
-            nxt = match_char_at(pattern, input_line, pi, ii)
+            nxt = match_char_at(pattern, input_line, pi, ii, captures)
             if nxt is None:
                 return None
             positions.append(nxt)
             while True:
-                nxt = match_char_at(pattern, input_line, pi, positions[-1])
+                nxt = match_char_at(pattern, input_line, pi, positions[-1], captures)
                 if nxt is None:
                     break
                 positions.append(nxt)
             for pos in reversed(positions):
-                result = match_from(pattern, input_line, q_pos + 1, pos)
+                result = match_from(pattern, input_line, q_pos + 1, pos, captures)
                 if result is not None:
                     return result
             return None
         if q_pos < len(pattern) and pattern[q_pos] == '*':
             positions = [ii]
             while True:
-                nxt = match_char_at(pattern, input_line, pi, positions[-1])
+                nxt = match_char_at(pattern, input_line, pi, positions[-1], captures)
                 if nxt is None:
                     break
                 positions.append(nxt)
             for pos in reversed(positions):
-                result = match_from(pattern, input_line, q_pos + 1, pos)
+                result = match_from(pattern, input_line, q_pos + 1, pos, captures)
                 if result is not None:
                     return result
             return None
         if q_pos < len(pattern) and pattern[q_pos] == '?':
-            nxt = match_char_at(pattern, input_line, pi, ii)
+            nxt = match_char_at(pattern, input_line, pi, ii, captures)
             if nxt is not None:
-                result = match_from(pattern, input_line, q_pos + 1, nxt)
+                result = match_from(pattern, input_line, q_pos + 1, nxt, captures)
                 if result is not None:
                     return result
-            return match_from(pattern, input_line, q_pos + 1, ii)
+            return match_from(pattern, input_line, q_pos + 1, ii, captures)
         brace = parse_brace(pattern, q_pos)
         if brace and pattern[pi] != '(':
             minimum, maximum, brace_len = brace
@@ -155,18 +161,18 @@ def match_from(pattern, input_line, pi, ii):
             cur = ii
             positions = [ii]
             for _ in range(minimum):
-                nxt = match_char_at(pattern, input_line, pi, cur)
+                nxt = match_char_at(pattern, input_line, pi, cur, captures)
                 if nxt is None:
                     return None
                 cur = nxt
                 positions.append(cur)
             while maximum is None or len(positions) - 1 < maximum:
-                nxt = match_char_at(pattern, input_line, pi, positions[-1])
+                nxt = match_char_at(pattern, input_line, pi, positions[-1], captures)
                 if nxt is None:
                     break
                 positions.append(nxt)
             for position in reversed(positions[minimum:]):
-                result = match_from(pattern, input_line, rest_pi, position)
+                result = match_from(pattern, input_line, rest_pi, position, captures)
                 if result is not None:
                     return result
             return None
@@ -184,13 +190,13 @@ def match_from(pattern, input_line, pi, ii):
 
                 def match_repeated_group(repetitions, current):
                     if repetitions >= minimum:
-                        result = match_from(pattern, input_line, after_group, current)
+                        result = match_from(pattern, input_line, after_group, current, captures)
                         if result is not None:
                             return result
                     if maximum is not None and repetitions == maximum:
                         return None
                     for alt in split_alternatives(group_content):
-                        next_position = match_from(alt, input_line, 0, current)
+                        next_position = match_from(alt, input_line, 0, current, captures)
                         if next_position is not None and next_position != current:
                             result = match_repeated_group(repetitions + 1, next_position)
                             if result is not None:
@@ -209,7 +215,7 @@ def match_from(pattern, input_line, pi, ii):
                     # Must match at least once
                     found_any = False
                     for alt in split_alternatives(group_content):
-                        r = match_from(alt, input_line, 0, cur)
+                        r = match_from(alt, input_line, 0, cur, captures)
                         if r is not None:
                             positions.append(r)
                             found_any = True
@@ -219,34 +225,37 @@ def match_from(pattern, input_line, pi, ii):
                     while True:
                         found_more = False
                         for alt in split_alternatives(group_content):
-                            r = match_from(alt, input_line, 0, positions[-1])
+                            r = match_from(alt, input_line, 0, positions[-1], captures)
                             if r is not None:
                                 positions.append(r)
                                 found_more = True
                         if not found_more:
                             break
                     for pos in reversed(positions):
-                        result = match_from(pattern, input_line, rest_pi, pos)
+                        result = match_from(pattern, input_line, rest_pi, pos, captures)
                         if result is not None:
                             return result
                     return None
                 else:  # ?
                     for alt in split_alternatives(group_content):
-                        r = match_from(alt, input_line, 0, ii)
+                        r = match_from(alt, input_line, 0, ii, captures)
                         if r is not None:
-                            result = match_from(pattern, input_line, rest_pi, r)
+                            result = match_from(pattern, input_line, rest_pi, r, captures)
                             if result is not None:
                                 return result
-                    return match_from(pattern, input_line, rest_pi, ii)
+                    return match_from(pattern, input_line, rest_pi, ii, captures)
             # No quantifier: try each alternative
             for alt in split_alternatives(group_content):
-                r = match_from(alt, input_line, 0, ii)
+                branch_captures = captures.copy()
+                r = match_from(alt, input_line, 0, ii, branch_captures)
                 if r is not None:
-                    result = match_from(pattern, input_line, rest_pi, r)
+                    branch_captures[1] = input_line[ii:r]
+                    result = match_from(pattern, input_line, rest_pi, r, branch_captures)
                     if result is not None:
+                        captures.update(branch_captures)
                         return result
             return None
-        nxt = match_char_at(pattern, input_line, pi, ii)
+        nxt = match_char_at(pattern, input_line, pi, ii, captures)
         if nxt is None:
             return None
         ii = nxt
