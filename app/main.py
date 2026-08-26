@@ -263,9 +263,12 @@ def match_from(pattern, input_line, pi, ii, captures=None, group_offset=0):
                     return match_from(pattern, input_line, rest_pi, ii, captures, group_offset)
             # No quantifier: try each alternative
             for alt in split_alternatives(group_content):
-                branch_captures = captures.copy()
-                r = match_from(alt, input_line, 0, ii, branch_captures, capture_number)
-                if r is not None:
+                for candidate_end in range(len(input_line), ii - 1, -1):
+                    branch_captures = captures.copy()
+                    bounded_input = input_line[:candidate_end]
+                    r = match_from(alt, bounded_input, 0, ii, branch_captures, capture_number)
+                    if r != candidate_end:
+                        continue
                     branch_captures[capture_number] = input_line[ii:r]
                     result = match_from(pattern, input_line, rest_pi, r, branch_captures, group_offset)
                     if result is not None:
